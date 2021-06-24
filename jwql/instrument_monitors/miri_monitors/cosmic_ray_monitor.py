@@ -54,7 +54,7 @@ from jwql.utils.constants import JWST_INSTRUMENT_NAMES, JWST_INSTRUMENT_NAMES_MI
 from jwql.utils.logging_functions import configure_logging
 from jwql.utils.logging_functions import log_info
 from jwql.utils.logging_functions import log_fail
-from jwql.utils.utils import copy_files, ensure_dir_exists, get_config
+from jwql.utils.utils import copy_files, ensure_dir_exists, get_config, filesystem_path
 
 
 class CosmicRay:
@@ -359,6 +359,60 @@ class CosmicRay:
 
         return query_result
 
+    def possible_apers(self, inst):
+        """Return possible apertures to check for cosmic rays
+
+        Parameters:
+        ----------
+        inst: str
+            The name of the instrument of interest
+
+        Returns:
+        -------
+        apers: list
+            A list of possible apertures to check for the given
+            instrument
+        """
+        if inst.lower() == 'nircam':
+            apers = ['NRCA1_FULL',
+                     'NRCA2_FULL',
+                     'NRCA3_FULL',
+                     'NRCA4_FULL',
+                     'NRCA5_FULL',
+
+                     'NRCB1_FULL',
+                     'NRCB2_FULL',
+                     'NRCB3_FULL',
+                     'NRCB4_FULL',
+                     'NRCB5_FULL']
+
+        if inst.lower() == 'miri':
+            apers = ['MIRIM_FULL',
+                     'MIRIM_ILLUM',
+                     'MIRIM_BRIGHTSKY',
+                     'MIRIM_SUB256',
+                     'MIRIM_SUB128',
+                     'MIRIM_SUB64',
+                     'MIRIM_CORON1065',
+                     'MIRIM_CORON1140',
+                     'MIRIM_CORON1550',
+                     'MIRIM_CORONLYOT',
+                     'MIRIM_SLITLESSPRISM',
+                     'MIRIFU_CHANNEL1A',
+                     'MIRIFU_CHANNEL1B'
+                     'MIRIFU_CHANNEL1C',
+                     'MIRIFU_CHANNEL2A',
+                     'MIRIFU_CHANNEL2B'
+                     'MIRIFU_CHANNEL2C',
+                     'MIRIFU_CHANNEL3A',
+                     'MIRIFU_CHANNEL3B'
+                     'MIRIFU_CHANNEL3C',
+                     'MIRIFU_CHANNEL4A',
+                     'MIRIFU_CHANNEL4B',
+                     'MIRIFU_CHANNEL4C']
+
+        return apers
+
     def process(self, file_list):
         """The main method for processing files. See module docstrings
         for further details.
@@ -366,8 +420,8 @@ class CosmicRay:
         Parameters
         ----------
         file_list : list
-        List of filenames (including full paths) to the cosmic ray
-        files
+            List of filenames (including full paths) to the cosmic ray
+            files
         """
 
         for file_name in file_list:
@@ -384,6 +438,7 @@ class CosmicRay:
                     copy_files([file_name], self.obs_dir)
                 except:
                     logging.info('Failed to copy {} to observation dir.'.format(file_name))
+                    pass
 
                 # Next we run the pipeline on the files to get the proper outputs
                 uncal_file = os.path.join(self.obs_dir, os.path.basename(file_name))
@@ -392,6 +447,7 @@ class CosmicRay:
                     pipeline_tools.calwebb_detector1_save_jump(uncal_file, self.obs_dir, ramp_fit=True, save_fitopt=False)
                 except:
                     logging.info('Failed to complete pipeline steps on {}.'.format(uncal_file))
+                    pass
 
                 # Next we analyze the cosmic rays in the new data
                 for output_file in os.listdir(self.obs_dir):
@@ -472,7 +528,8 @@ class CosmicRay:
                 self.identify_tables()
 
                 # Get a list of possible apertures
-                possible_apertures = list(Siaf(instrument).apernames)
+                #possible_apertures = list(Siaf(instrument).apernames)
+                possible_apertures = self.possible_apers(instrument)
 
                 # Use this line instead to save time while testing
                 #possible_apertures = ['MIRIM_FULL', 'NRCB4_FULL']
@@ -492,23 +549,24 @@ class CosmicRay:
                     new_entries = self.query_mast()
 
                     # for testing purposes only
-                    new_filenames = get_config()['local_test_data']
+                    #new_filenames = get_config()['local_test_data']
+                    new_filenames = []
 
-                    # for file_entry in new_entries['data']:
-                    #    try:
-                    #        new_filenames.append(filesystem_path(file_entry['filename']))
-                    #    except FileNotFoundError:
-                    #        logging.info('\t{} not found in target directory'.format(file_entry['filename']))
-                    #    except ValueError:
-                    #        logging.info(
-                    #            '\tProvided file {} does not follow JWST naming conventions.'.format(file_entry['filename']))
+                    for file_entry in new_entries['data']:
+                        try:
+                            new_filenames.append(filesystem_path(file_entry['filename']))
+                        except FileNotFoundError:
+                            logging.info('\t{} not found in target directory'.format(file_entry['filename']))
+                        except ValueError:
+                            logging.info(
+                                '\tProvided file {} does not follow JWST naming conventions.'.format(file_entry['filename']))
 
                     # Next we copy new files to the working directory
                     output_dir = os.path.join(get_config()['outputs'], 'cosmic_ray_monitor')
 
-                    self.data_dir = get_config()['local_test_dir']  # for testing purposes only
+                    #self.data_dir = get_config()['local_test_dir']  # for testing purposes only
 
-                    # self.data_dir =  os.path.join(output_dir,'data')
+                    self.data_dir =  os.path.join(output_dir,'data')
                     ensure_dir_exists(self.data_dir)
 
                     cosmic_ray_files, not_copied = copy_files(new_filenames, self.data_dir)
